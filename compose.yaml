@@ -12,7 +12,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-5000}:5000"
+      - "${APP_BIND_IP:-0.0.0.0}:${APP_PORT:-5000}:5000"
     environment:
       BIND: "0.0.0.0:5000"
       BUDGET_DB_PATH: /app/data/orcamento.db

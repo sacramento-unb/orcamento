@@ -21,7 +21,8 @@ mkdir -p "${deploy_dir}" "${deploy_dir}/data" "${deploy_dir}/exports"
 if [[ ! -f "${deploy_dir}/.env" ]]; then
   umask 077
   {
-    printf 'APP_PORT=80\n'
+    printf 'APP_BIND_IP=127.0.0.1\n'
+    printf 'APP_PORT=5050\n'
     printf 'APP_UID=%s\n' "$(id -u)"
     printf 'APP_GID=%s\n' "$(id -g)"
   } >"${deploy_dir}/.env"

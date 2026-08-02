@@ -160,8 +160,9 @@ auto-hospedado com o rótulo `orcamento-production` executa o deploy no servidor
 O conteúdo versionado é sincronizado em `~/apps/orcamento`, preservando o banco,
 as exportações e o `.env`, e o Docker Compose recria somente o necessário.
 
-O deploy de produção usa a porta 80 por padrão. O estado do pipeline aparece na
-aba **Actions** do repositório.
+No servidor, o container fica restrito a `127.0.0.1:5050`; o Nginx publica o
+serviço como `http://orcamento.local` na porta 80. O estado do pipeline aparece
+na aba **Actions** do repositório.
 
 ## API principal
 
