@@ -25,7 +25,8 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid "${APP_GID}" appgroup \
+    && existing_group="$(getent group "${APP_GID}" | cut -d: -f1)" \
+    && if [ -n "${existing_group}" ]; then groupmod --new-name appgroup "${existing_group}"; else groupadd --gid "${APP_GID}" appgroup; fi \
     && useradd --uid "${APP_UID}" --gid appgroup --create-home appuser
 
 COPY backend/requirements.txt /app/backend/requirements.txt
