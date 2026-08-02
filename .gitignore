@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+frontend/dist/
+data/*
+!data/.gitkeep
+exports/*
+!exports/.gitkeep
+*.ods
+.env
+
+# Arquivos bancarios e documentos pessoais nunca devem ser versionados.
+*.csv
+*.ofx
+*.pdf
+*.xlsx

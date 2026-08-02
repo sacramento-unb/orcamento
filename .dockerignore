@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+**/__pycache__
+**/*.py[cod]
+backend/tests
+data/*
+exports/*
+frontend/dist
+frontend/node_modules
+.env
+.openai
+*.log
+
