@@ -18,7 +18,7 @@ async function request(path, options = {}) {
 
 export const api = {
   summary: (month) => request(`/api/summary?month=${month}`),
-  entries: () => request("/api/entries"),
+  entries: (month) => request(`/api/entries?month=${month}`),
   investments: (year) => request(`/api/investments?year=${year}`),
   exports: () => request("/api/exports"),
   createEntry: (entry) =>

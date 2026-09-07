@@ -1310,7 +1310,7 @@ export default function App() {
     try {
       const [summaryData, entriesData, investmentsData, exportsData] = await Promise.all([
         api.summary(month),
-        api.entries(),
+        api.entries(month),
         api.investments(month.slice(0, 4)),
         api.exports(),
       ]);
