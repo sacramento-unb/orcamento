@@ -174,3 +174,15 @@ na aba **Actions** do repositório.
 - `DELETE /api/entries/:id`
 - `POST /api/export`
 - `GET /api/exports`
+
+## Audit status and privacy boundary
+
+This is a private financial application. Bank exports, budget values, SQLite
+state and generated spreadsheets must remain outside Git and public demos. The
+self-hosted deployment workflow was not executed during this audit; review
+runner access, backups and `.env` handling before enabling it.
+
+On 2026-10-20 the source was inspected without importing personal statements,
+starting Docker or modifying any database. No repository license is present;
+decide licensing and disclosure only after removing or anonymizing financial
+fixtures.
