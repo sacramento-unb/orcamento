@@ -6,15 +6,15 @@ uma nova versão `.xlsx` da planilha a cada alteração. O front-end React ofere
 gráficos interativos, navegação de janeiro a dezembro, filtros e uma tela
 completa de edição.
 
-O dashboard também traz um plano mensal baseado em renda de R$ 30.800,00, gastos
-fixos de R$ 5.311,00, aposentadoria turbinada, fundo para imóvel próprio,
-investimentos diversificados e reserva de emergência. As provisões variáveis
-ficam identificadas como estimativas até serem substituídas por lançamentos reais.
+O dashboard também traz um plano mensal demonstrativo, com categorias genéricas
+de renda, gastos fixos, reserva de emergência, aposentadoria e investimentos.
+As provisões variáveis ficam identificadas como estimativas até serem
+substituídas por lançamentos reais.
 
 ## O que foi importado
 
-- Gastos fixos e receitas informados no orçamento pessoal.
-- Os valores calculados da planilha original são importados como valores mensais.
+- Gastos fixos e receitas de demonstração usados para validar o fluxo.
+- Os valores calculados de uma planilha local são importados como valores mensais.
 - Itens históricos antigos permanecem preservados, mas não entram no plano atual.
 
 O arquivo original não é modificado. O banco fica em `data/orcamento.db` e as
