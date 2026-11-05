@@ -5,7 +5,9 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from backend.app import create_app
+from backend.auth import upsert_user
 from backend.bank_import import parse_bank_file
+from backend.database import connect
 
 
 @pytest.fixture()
@@ -16,6 +18,8 @@ def client(tmp_path: Path):
             "DATABASE": str(tmp_path / "test.db"),
             "SOURCE_SPREADSHEET": str(tmp_path / "missing.ods"),
             "EXPORT_DIR": str(tmp_path / "exports"),
+            "SEED_PERSONAL_PLAN": False,
+            "AUTH_REQUIRED": False,
         }
     )
     return app.test_client()
@@ -34,6 +38,89 @@ def sample_entry(**overrides):
     }
     entry.update(overrides)
     return entry
+
+
+def test_budget_plan_matches_user_inputs(client):
+    response = client.get("/api/plan?month=2026-07")
+    assert response.status_code == 200
+    plan = response.get_json()
+    assert plan["income_total"] == 10000
+    assert plan["fixed_total"] == 2600
+    assert plan["plan_total"] == 10000
+    assert plan["property"]["amount"] == 2500
+    assert plan["retirement"]["amount"] == 1500
+    assert plan["preserved_theoretical"]["amount"] == 5400
+    assert len(plan["property_projection"]) == 61
+    assert plan["property_projection"][-1]["balance"] > plan["property_projection"][-1]["contributed"]
+
+
+def test_budget_plan_follows_recurring_entries(client):
+    client.post(
+        "/api/entries",
+        json=sample_entry(
+            description="Nova renda", amount=1000, entry_type="income", category="Salário"
+        ),
+    )
+    client.post(
+        "/api/entries",
+        json=sample_entry(description="Novo fixo", amount=200, start_month="2026-07"),
+    )
+    plan = client.get("/api/plan?month=2026-07").get_json()
+    assert plan["income_total"] == 1000
+    assert plan["fixed_total"] == 200
+    assert plan["fixed"][0]["description"] == "Novo fixo"
+    assert plan["plan_total"] == round(
+        plan["fixed_total"] + sum(item["amount"] for item in plan["allocations"]), 2
+    )
+    assert plan["preserved_theoretical"]["amount"] == round(
+        sum(
+            item["amount"]
+            for item in plan["allocations"]
+            if item["key"] in {"emergency", "retirement", "property", "investments"}
+        ),
+        2,
+    )
+
+
+def test_surplus_is_redirected_to_property(client):
+    client.post(
+        "/api/entries",
+        json=sample_entry(
+            description="Renda alta", amount=40000, entry_type="income", category="Salário"
+        ),
+    )
+    client.post(
+        "/api/entries",
+        json=sample_entry(description="Fixo menor", amount=100),
+    )
+    plan = client.get("/api/plan?month=2026-07").get_json()
+    assert plan["free_balance"] == 0
+    assert plan["property"]["amount"] > 1500
+    assert plan["plan_total"] == 40000
+
+
+def test_authentication_protects_private_api(tmp_path: Path):
+    database = tmp_path / "auth.db"
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE": str(database),
+            "SOURCE_SPREADSHEET": str(tmp_path / "missing.ods"),
+            "EXPORT_DIR": str(tmp_path / "exports"),
+            "SEED_PERSONAL_PLAN": False,
+            "AUTH_REQUIRED": True,
+            "SECRET_KEY": "test-secret",
+        }
+    )
+    with connect(database) as connection:
+        upsert_user(connection, "demo_user", "demo_password")
+    client = app.test_client()
+    assert client.get("/api/entries").status_code == 401
+    login = client.post(
+        "/api/auth/login", json={"username": "demo_user", "password": "demo_password"}
+    )
+    assert login.status_code == 200
+    assert client.get("/api/entries").status_code == 200
 
 
 def test_create_update_delete_and_export(client):
@@ -66,6 +153,7 @@ def test_create_update_delete_and_export(client):
     workbook = load_workbook(workbook_path, read_only=True)
     assert workbook.sheetnames == [
         "Visão geral",
+        "Plano mensal",
         "Lançamentos",
         "Investimentos",
         "Janeiro",

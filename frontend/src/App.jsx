@@ -23,6 +23,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   Landmark,
+  LogOut,
   Menu,
   Pencil,
   Plus,
@@ -48,6 +49,7 @@ const CATEGORIES = [
   "Educação",
   "Lazer",
   "Assinaturas",
+  "Proteção",
   "Salário",
   "Investimentos",
   "Outros",
@@ -160,6 +162,52 @@ function EmptyChart() {
   );
 }
 
+function Login({ onLogin }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await onLogin({ username, password });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-card">
+        <div className="login-brand"><span className="brand-mark"><OrcaIcon size={30} /></span><strong>Orca</strong></div>
+        <span className="eyebrow">Acesso privado</span>
+        <h1>Suas finanças, no lugar certo.</h1>
+        <p>Entre para acessar o orçamento mensal e os investimentos.</p>
+        <form onSubmit={submit}>
+          <label className="field">
+            <span>Usuário</span>
+            <input autoFocus required value={username} onChange={(event) => setUsername(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Senha</span>
+            <input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          {error && <div className="login-error" role="alert">{error}</div>}
+          <button className="primary-button login-button" disabled={loading}>
+            {loading ? <RefreshCw className="spin" size={17} /> : <Check size={17} />}
+            {loading ? "Entrando…" : "Entrar"}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 function SummaryCard({ label, value, icon: Icon, tone, detail, formatter = currency.format }) {
   return (
     <article className={`summary-card ${tone}`}>
@@ -236,19 +284,19 @@ function Dashboard({ summary, loading }) {
           }
         />
         <SummaryCard
-          label="Balanço livre"
+          label="Saldo atual"
           value={summary?.balance || 0}
           icon={WalletCards}
           tone="balance"
-          detail={summary?.balance >= 0 ? "saldo positivo" : "atenção ao orçamento"}
+          detail={summary?.balance >= 0 ? "antes do plano recomendado" : "atenção ao orçamento"}
         />
         <SummaryCard
-          label="Taxa de economia"
+          label="Taxa atual"
           value={summary?.savings_rate || 0}
           icon={TrendingUp}
           tone="rate"
           formatter={(value) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value)}
-          detail="% da renda preservada"
+          detail="% ainda não lançada"
         />
       </section>
 
@@ -433,6 +481,130 @@ function Dashboard({ summary, loading }) {
         </article>
       </section>
     </>
+  );
+}
+
+function PlanSection({ plan }) {
+  if (!plan) return null;
+  const allocation = (key) => plan.allocations.find((item) => item.key === key);
+  const formatPercent = (amount) => `${((amount / plan.income_total) * 100).toFixed(1)}%`;
+
+  return (
+    <section className="plan-section">
+      <div className="plan-title">
+        <div>
+          <span className="eyebrow">Plano recomendado</span>
+          <h2>Destino da renda mensal</h2>
+        </div>
+        <span className="plan-total">{currency.format(plan.income_total)} de renda</span>
+      </div>
+
+      <div className="plan-grid">
+        <article className="panel plan-overview">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Distribuição</span>
+              <h2>Orçamento base</h2>
+            </div>
+          </div>
+          <div className="plan-list">
+            <div className="plan-row fixed-row">
+              <span><i />Gastos fixos informados</span>
+              <strong>{currency.format(plan.fixed_total)}</strong>
+              <small>{formatPercent(plan.fixed_total)}</small>
+            </div>
+            <div className="plan-row preserved-row">
+              <span><i />{plan.preserved_theoretical.description}</span>
+              <strong>{currency.format(plan.preserved_theoretical.amount)}</strong>
+              <small>{formatPercent(plan.preserved_theoretical.amount)}</small>
+            </div>
+            {plan.allocations.map((item) => (
+              <div className="plan-row" key={item.key}>
+                <span><i className={`plan-dot ${item.key}`} />{item.description}</span>
+                <strong>{currency.format(item.amount)}</strong>
+                <small>{formatPercent(item.amount)}</small>
+              </div>
+            ))}
+          </div>
+          <div className="plan-total-row">
+            <span>Saldo não destinado · direcionado ao imóvel</span>
+            <strong>{currency.format(plan.free_balance)}</strong>
+          </div>
+        </article>
+
+        <article className="panel goal-card property-goal">
+          <span className="goal-label">Compra do imóvel próprio</span>
+          <strong>{currency.format(allocation("property").amount)}<small>/mês</small></strong>
+          <p>{currency.format(allocation("property").amount * 12)} em 12 meses para entrada e custos.</p>
+          <span className="goal-note">Separar do restante da carteira e revisar a meta com o valor do imóvel.</span>
+        </article>
+
+        <article className="panel goal-card retirement-goal">
+          <span className="goal-label">Aposentadoria turbinada</span>
+          <strong>{currency.format(allocation("retirement").amount)}<small>/mês</small></strong>
+          <p>{formatPercent(allocation("retirement").amount)} da renda em aportes de longo prazo.</p>
+          <span className="goal-note">Manter constância e ajustar a carteira ao perfil de risco.</span>
+        </article>
+
+        <article className="panel goal-card investment-goal">
+          <span className="goal-label">Investimentos</span>
+          <strong>{currency.format(allocation("investments").amount)}<small>/mês</small></strong>
+          <p>Além do imóvel e da aposentadoria, para diversificação e objetivos médios.</p>
+          <span className="goal-note">Registre aplicações na tela Investimentos quando importar o banco.</span>
+        </article>
+
+        <article className="panel property-chart-card">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Compra do imóvel próprio</span>
+              <h2>Patrimônio projetado</h2>
+            </div>
+            <span className="chart-assumption">
+              100% CDI · {(plan.cdi_annual_rate * 100).toFixed(1)}% a.a.
+            </span>
+          </div>
+          <div className="property-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={plan.property_projection} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="propertyGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a18bd0" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="#a18bd0" stopOpacity={0.04} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#e6ebe5" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={(value) => (value === 0 ? "Hoje" : value % 12 === 0 ? `${value / 12}a` : "")}
+                  tick={{ fill: "#87938d", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(value) => `${Math.round(value / 1000)}k`}
+                  tick={{ fill: "#87938d", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="balance"
+                  name="Patrimônio projetado"
+                  stroke="#8e73c3"
+                  strokeWidth={2.5}
+                  fill="url(#propertyGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="chart-note">
+            Projeção de 60 meses com o aporte mensal do fundo, juros compostos mensais equivalentes à premissa de 100% do CDI e aportes no fim de cada mês. Ajuste <code>ORCA_CDI_ANNUAL_RATE</code> quando quiser atualizar a taxa.
+          </p>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -1279,9 +1451,11 @@ function Editor({
 }
 
 export default function App() {
+  const [auth, setAuth] = useState({ loading: true, user: null });
   const [tab, setTab] = useState("dashboard");
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState(null);
+  const [plan, setPlan] = useState(null);
   const [entries, setEntries] = useState([]);
   const [investments, setInvestments] = useState([]);
   const [exports, setExports] = useState([]);
@@ -1294,6 +1468,22 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [bankModalOpen, setBankModalOpen] = useState(false);
+
+  useEffect(() => {
+    api.me()
+      .then((result) => setAuth({ loading: false, user: result.user || null }))
+      .catch(() => setAuth({ loading: false, user: null }));
+  }, []);
+
+  async function login(credentials) {
+    const result = await api.login(credentials);
+    setAuth({ loading: false, user: result.user });
+  }
+
+  async function logout() {
+    await api.logout();
+    setAuth({ loading: false, user: null });
+  }
 
   const showToast = useCallback((message, kind = "success") => {
     setToast({ message, kind });
@@ -1308,13 +1498,15 @@ export default function App() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryData, entriesData, investmentsData, exportsData] = await Promise.all([
+      const [summaryData, planData, entriesData, investmentsData, exportsData] = await Promise.all([
         api.summary(month),
-        api.entries(month),
+        api.plan(month),
+        api.entries(),
         api.investments(month.slice(0, 4)),
         api.exports(),
       ]);
       setSummary(summaryData);
+      setPlan(planData);
       setEntries(entriesData);
       setInvestments(investmentsData);
       setExports(exportsData);
@@ -1326,8 +1518,14 @@ export default function App() {
   }, [month, showToast]);
 
   useEffect(() => {
+    if (!auth.user) return undefined;
     loadAll();
-  }, [loadAll]);
+  }, [auth.user, loadAll]);
+
+  if (auth.loading) {
+    return <div className="loading-state"><RefreshCw className="spin" size={28} /><span>Carregando…</span></div>;
+  }
+  if (!auth.user) return <Login onLogin={login} />;
 
   async function saveEntry(entry) {
     setSaving(true);
@@ -1467,6 +1665,10 @@ export default function App() {
             </h1>
           </div>
           <div className="topbar-actions">
+            <span className="signed-in-user">{auth.user.username}</span>
+            <button className="secondary-button logout-button" onClick={logout}>
+              <LogOut size={16} /> Sair
+            </button>
             <label className="month-picker year-picker">
               <span>Ano</span>
               <div className="year-select">
@@ -1502,7 +1704,10 @@ export default function App() {
         <div className="content">
           {tab !== "investments" && <MonthTabs month={month} onChange={setMonth} />}
           {tab === "dashboard" ? (
-            <Dashboard summary={summary} loading={loading} />
+            <>
+              <Dashboard summary={summary} loading={loading} />
+              <PlanSection plan={plan} />
+            </>
           ) : tab === "investments" ? (
             <Investments
               investments={investments}

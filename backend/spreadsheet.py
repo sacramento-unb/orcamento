@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from .budget_plan import build_budget_plan
 from .database import active_entries_query
 
 
@@ -273,6 +274,71 @@ def _create_month_sheet(
         sheet.column_dimensions[get_column_letter(index)].width = width
 
 
+def _create_plan_sheet(
+    workbook: Workbook, connection: sqlite3.Connection, selected_month: str
+) -> None:
+    plan = build_budget_plan(connection, selected_month)
+    sheet = workbook.create_sheet("Plano mensal", 1)
+    sheet.sheet_view.showGridLines = False
+    sheet.merge_cells("A1:E1")
+    sheet["A1"] = "Plano mensal de orçamento"
+    sheet["A1"].font = Font(size=16, bold=True, color="FFFFFF")
+    sheet["A1"].fill = PatternFill("solid", fgColor="0B3B36")
+    sheet["A1"].alignment = Alignment(vertical="center")
+    sheet.row_dimensions[1].height = 30
+    sheet.append(["Referência", "Valores informados pelo usuário e provisões recomendadas."])
+    sheet.append([])
+    sheet.append(["Grupo", "Item", "Valor mensal", "% da renda", "Observação"])
+    for cell in sheet[4]:
+        cell.fill = PatternFill("solid", fgColor="DDE9E3")
+        cell.font = Font(bold=True, color="234139")
+
+    row = 5
+    for item in plan["income"]:
+        sheet.append(["Renda", item["description"], item["amount"], None, "Valor informado."])
+        sheet.cell(row, 4, f"=C{row}/$C$8")
+        row += 1
+    sheet.append(["Renda", "Total da renda", None, None, ""])
+    sheet.cell(row, 3, f"=SUM(C5:C{row - 1})")
+    sheet.cell(row, 4, f"=C{row}/$C$8")
+    income_total_row = row
+    row += 2
+    fixed_start = row
+    for item in plan["fixed"]:
+        sheet.append(["Gasto fixo", item["description"], item["amount"], None, "Valor informado."])
+        sheet.cell(row, 4, f"=C{row}/$C$8")
+        row += 1
+    sheet.append(["Gasto fixo", "Total de gastos fixos", None, None, ""])
+    sheet.cell(row, 3, f"=SUM(C{fixed_start}:C{row - 1})")
+    sheet.cell(row, 4, f"=C{row}/$C$8")
+    fixed_total_row = row
+    row += 2
+    allocation_start = row
+    for item in plan["allocations"]:
+        sheet.append(["Plano", item["description"], item["amount"], None, item["notes"]])
+        sheet.cell(row, 4, f"=C{row}/$C$8")
+        row += 1
+    sheet.append(["Plano", "Total destinado", None, None, ""])
+    sheet.cell(row, 3, f"=C{fixed_total_row}+SUM(C{allocation_start}:C{row - 1})")
+    sheet.cell(row, 4, f"=C{row}/$C$8")
+    total_row = row
+    row += 1
+    sheet.append(["Plano", "Saldo não destinado", None, None, ""])
+    sheet.cell(row, 3, f"=C{income_total_row}-C{total_row}")
+    sheet.cell(row, 4, f"=C{row}/$C$8")
+
+    for cell in sheet[1]:
+        cell.alignment = Alignment(vertical="center")
+    for cell in sheet["C"][4:]:
+        cell.number_format = 'R$ #,##0.00'
+    for cell in sheet["D"][4:]:
+        cell.number_format = '0.0%'
+    sheet.freeze_panes = "A5"
+    sheet.auto_filter.ref = f"A4:E{row}"
+    for index, width in enumerate([16, 32, 18, 14, 66], start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+
+
 def export_workbook(
     connection: sqlite3.Connection,
     export_dir: str | Path,
@@ -299,6 +365,8 @@ def export_workbook(
         if isinstance(cell.value, (int, float)):
             cell.number_format = 'R$ #,##0.00'
     _style_sheet(overview)
+
+    _create_plan_sheet(workbook, connection, selected_month)
 
     entries_sheet = workbook.create_sheet("Lançamentos")
     entries_sheet.append(

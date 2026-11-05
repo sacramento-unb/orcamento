@@ -17,9 +17,17 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  me: () => request("/api/auth/me"),
+  login: (credentials) =>
+    request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    }),
+  logout: () => request("/api/auth/logout", { method: "POST" }),
   summary: (month) => request(`/api/summary?month=${month}`),
   entries: (month) => request(`/api/entries?month=${month}`),
   investments: (year) => request(`/api/investments?year=${year}`),
+  plan: (month) => request(`/api/plan?month=${month}`),
   exports: () => request("/api/exports"),
   createEntry: (entry) =>
     request("/api/entries", { method: "POST", body: JSON.stringify(entry) }),

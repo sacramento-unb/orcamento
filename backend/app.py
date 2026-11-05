@@ -7,10 +7,12 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, session
 from flask_cors import CORS
 
 from .bank_import import parse_bank_file
+from .auth import authenticate
+from .budget_plan import build_budget_plan, seed_personal_plan
 from .database import active_entries_query, connect, init_db
 from .reconciliation import reconciliation_options
 from .spreadsheet import (
@@ -128,8 +130,14 @@ def create_app(test_config: dict | None = None) -> Flask:
             "BUDGET_SOURCE_FILE", str(ROOT_DIR / "gastos mensais.ods")
         ),
         EXPORT_DIR=os.getenv("BUDGET_EXPORT_DIR", str(ROOT_DIR / "exports")),
+        SEED_PERSONAL_PLAN=True,
         TESTING=False,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+        AUTH_REQUIRED=os.getenv("ORCA_AUTH_REQUIRED", "1") != "0",
+        SECRET_KEY=os.getenv("ORCA_SECRET_KEY") or os.urandom(32),
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=False,
     )
     if test_config:
         app.config.update(test_config)
@@ -137,17 +145,28 @@ def create_app(test_config: dict | None = None) -> Flask:
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     init_db(app.config["DATABASE"])
     source = Path(app.config["SOURCE_SPREADSHEET"])
-    if source.exists():
-        with connect(app.config["DATABASE"]) as connection:
+    with connect(app.config["DATABASE"]) as connection:
+        seeded = migrated = planned = False
+        if source.exists():
             seeded = seed_from_ods(connection, source)
             migrated = migrate_imported_entries_to_year_start(connection)
-            if seeded or migrated:
-                export_workbook(
-                    connection, app.config["EXPORT_DIR"], _current_month()
-                )
+        if app.config["SEED_PERSONAL_PLAN"]:
+            planned = seed_personal_plan(connection, _current_month())
+        if seeded or migrated or planned:
+            export_workbook(connection, app.config["EXPORT_DIR"], _current_month())
 
     def db() -> sqlite3.Connection:
         return connect(app.config["DATABASE"])
+
+    @app.before_request
+    def require_authentication():
+        if not app.config["AUTH_REQUIRED"] or not request.path.startswith("/api/"):
+            return None
+        if request.path in {"/api/health", "/api/auth/login", "/api/auth/me"}:
+            return None
+        if session.get("user_id"):
+            return None
+        return jsonify({"error": "Autenticação necessária."}), 401
 
     def export_after_change(connection: sqlite3.Connection, month: str) -> dict:
         exported = export_workbook(connection, app.config["EXPORT_DIR"], month)
@@ -161,6 +180,36 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/health")
     def health():
         return jsonify({"status": "ok"})
+
+    @app.get("/api/auth/me")
+    def auth_me():
+        if not session.get("user_id"):
+            return jsonify({"authenticated": False})
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": {"id": session["user_id"], "username": session["username"]},
+            }
+        )
+
+    @app.post("/api/auth/login")
+    def auth_login():
+        payload = request.get_json(silent=True) or {}
+        username = str(payload.get("username", "")).strip().lower()
+        password = str(payload.get("password", ""))
+        with db() as connection:
+            user = authenticate(connection, username, password)
+        if not user:
+            return jsonify({"error": "Usuário ou senha inválidos."}), 401
+        session.clear()
+        session["user_id"] = user["id"]
+        session["username"] = user["username"]
+        return jsonify({"authenticated": True, "user": user})
+
+    @app.post("/api/auth/logout")
+    def auth_logout():
+        session.clear()
+        return jsonify({"authenticated": False})
 
     @app.get("/api/entries")
     def get_entries():
@@ -276,6 +325,14 @@ def create_app(test_config: dict | None = None) -> Flask:
                     """
                 ).fetchall()
         return jsonify([_serialize_investment(row) for row in rows])
+
+    @app.get("/api/plan")
+    def plan():
+        month = request.args.get("month", _current_month())
+        if not MONTH_PATTERN.match(month):
+            return jsonify({"error": "Mês inválido."}), 400
+        with db() as connection:
+            return jsonify(build_budget_plan(connection, month))
 
     @app.post("/api/entries")
     def create_entry():

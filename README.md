@@ -6,12 +6,16 @@ uma nova versão `.xlsx` da planilha a cada alteração. O front-end React ofere
 gráficos interativos, navegação de janeiro a dezembro, filtros e uma tela
 completa de edição.
 
+O dashboard também traz um plano mensal baseado em renda de R$ 30.800,00, gastos
+fixos de R$ 5.311,00, aposentadoria turbinada, fundo para imóvel próprio,
+investimentos diversificados e reserva de emergência. As provisões variáveis
+ficam identificadas como estimativas até serem substituídas por lançamentos reais.
+
 ## O que foi importado
 
-- Gastos fixos: Plano de saúde, Gasolina, Seguro carro, IPVA e Escola.
-- Receitas fixas: Salário Enge — Líquido e Salário Digifarmz — Líquido.
+- Gastos fixos e receitas informados no orçamento pessoal.
 - Os valores calculados da planilha original são importados como valores mensais.
-- Os itens importados são repetidos nos 12 meses do ano.
+- Itens históricos antigos permanecem preservados, mas não entram no plano atual.
 
 O arquivo original não é modificado. O banco fica em `data/orcamento.db` e as
 novas versões ficam em `exports/`. Cada arquivo exportado contém uma aba para
@@ -155,20 +159,16 @@ APP_PORT=8080 docker compose up -d
 ## CI/CD
 
 Alterações enviadas à branch `main` passam pelos testes do back-end e pela
-compilação do front-end no GitHub Actions. Depois da validação, um runner
-auto-hospedado com o rótulo `orcamento-production` executa o deploy no servidor.
-O conteúdo versionado é sincronizado em `~/apps/orcamento`, preservando o banco,
-as exportações e o `.env`, e o Docker Compose recria somente o necessário.
-
-No servidor, o container fica restrito a `127.0.0.1:5050`; o Nginx publica o
-serviço como `http://orcamento.local` na porta 80. O estado do pipeline aparece
-na aba **Actions** do repositório.
+compilação do front-end no GitHub Actions. A publicação em um servidor é uma
+etapa opcional do operador; nenhum host, conta ou credencial de produção faz
+parte deste repositório.
 
 ## API principal
 
 - `GET /api/summary?month=AAAA-MM`
 - `GET /api/entries`
 - `GET /api/investments?year=AAAA`
+- `GET /api/plan`
 - `POST /api/entries`
 - `PUT /api/entries/:id`
 - `DELETE /api/entries/:id`
